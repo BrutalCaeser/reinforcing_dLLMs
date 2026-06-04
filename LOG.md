@@ -7,6 +7,23 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Gate G1-RL check 3 (tiny RL smoke) PASS → **Gate G1-RL CLOSED**
+
+Ran d1's actual trainer end-to-end (shrunk: G=4, max_completion 64, diffusion_steps 32, num_iterations 2,
+max_steps 2) on Countdown. Took **3 tries** — each caught a real env/integration gap the isolated tests
+couldn't (which is exactly what a smoke test is for; the RL code itself never errored):
+- v1 7427664: `import wandb` → `pkg_resources` gone (env had setuptools **82**; ≥81 removed it). Fix: pin `setuptools<81` (also baked into build_d1_env.sbatch).
+- v2 7427726: trl GRPOTrainer `import deepspeed` → `MissingCUDAException: CUDA_HOME does not exist`. Fix: `module load cuda/12.8.0` (major 12 == torch cu124) + export CUDA_HOME in the job.
+- v3 **7427787 PASS** (V100-SXM2-32GB, rc=0, 3:32 wall): loop runs, **no OOM**. Output:
+  `loss 0.0, grad_norm 1.47→0.52, reward 0.325, reward_std 0.45, zero_std_ratio 0, kl 0, train_loss 2.98e-8`.
+  - `loss≈0` with `grad_norm>0` is **correct GRPO** (advantages mean-centered ⇒ ΣA=0 ⇒ loss value ~0, but
+    gradient ΣAᵢ·∇logπ(oᵢ)≠0). Gradients flow, finite.
+  - **reward variance is real** (std 0.45, zero_std_ratio 0) — one of 4 completions scored ~1.0 (a correct
+    Countdown answer from the un-trained model) ⇒ meaningful advantage. Reward + KL wiring live.
+- **Timing (V100):** ~66.5s for 2 steps, generation-dominated (gen of 1 prompt × G4 × 32 NFE ≈ ~55s). On
+  A100/H200 (Rung A) expect 2–4× faster; LLaDA-8B 4-bit + LoRA r128 + G4 gen fit in **32GB** ⇒ ample headroom.
+- **Gate G1-RL CLOSED** (checks 1 ✅ estimator, 2 ✅ rewards, 3 ✅ loop). → **Phase 2: Rung-A RL run.**
+
 ## 2026-06-04 — Project rename + Gate G1-RL checks 1&2 PASS + docs
 
 - **Rename:** `diffusion-rl` → **`reinforcing_dLLMs`** (GitHub repo + local dir + project identity).

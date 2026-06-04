@@ -4,14 +4,15 @@ Living results & analysis. Every gate's **numbers** and an **honest interpretati
 result lands (even partial or negative). The "why" behind the methods is in `theory.md`; the plan is in
 `SPEC.md`; the chronological trail is in `LOG.md`.
 
-**Status:** Phase 1 — Gate G1-RL checks 1 & 2 **PASS**. Next: check 3 (tiny RL smoke) → Phase 2 (Rung-A RL run).
+**Status:** **Gate G1-RL CLOSED** — checks 1 (estimator), 2 (rewards), 3 (tiny RL loop) all **PASS**. Next: **Phase 2 — Rung-A RL run** (Gate G-RL).
 
 | Gate | Question | Verdict |
 |---|---|---|
 | G-go | Is a full reproduction feasible on our budget? | **NO** (~24 GPU-days); **Rung A** (~0.5 GPU-day) **GO** |
 | G0-RL | Does the env work + what's the no-RL baseline? | ✅ baseline **21.48%** ≈ d1's **20.70%** |
-| G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
 | G1-RL (1) | Does d1's one-step log-prob estimator hold up vs the ELBO? | ✅ **ALL PASS** (ranking 1.0, bias +0.10, noise cancels) |
+| G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
+| G1-RL (3) | Does the full RL loop run (no OOM, finite loss, grad flows)? | ✅ **PASS** (V100, rc=0; loss≈0 w/ grad_norm 1.47; reward var real) |
 | G-RL | Does RL raise held-out accuracy over baseline? | ⏳ pending (Phase 2) |
 
 ---
@@ -127,9 +128,31 @@ properties GRPO needs. It is validated for the Rung-A run.
 
 ---
 
-## What's next
-- **Check 3 — tiny RL smoke** (`exp/phase1_tiny_rl.sbatch`, to be added): d1 trainer, `G=2`,
-  `max_completion 64`, `diffusion_steps 32`, 2–4 steps; confirm the loop runs, loss is finite, no OOM →
-  **close Gate G1-RL**.
-- **Phase 2 — Rung-A RL run** (Gate G-RL): the headline — does held-out Countdown accuracy rise above
-  21.48%? This is the reproduction's core claim.
+## Gate G1-RL, check 3 — tiny end-to-end RL smoke (PASS)
+
+`exp/phase1_tiny_rl.sbatch` ran d1's actual trainer (G=4, max_completion 64, diffusion_steps 32,
+num_iterations 2, max_steps 2) on Countdown, V100-SXM2-32GB, rc=0, 3:32 wall. Took 3 tries — each caught a
+real env gap the isolated tests couldn't (the RL code itself never errored):
+
+| try | cleared | failed at | fix |
+|---|---|---|---|
+| v1 | — | `import wandb` → `pkg_resources` (setuptools 82 removed it) | pin `setuptools<81` (+ build script) |
+| v2 | wandb | trl→`import deepspeed` → `CUDA_HOME` unset | `module load cuda/12.8.0` (major 12 == torch cu124) |
+| **v3** | both | — **PASS** | — |
+
+v3 output: `loss 0.0, grad_norm 1.47→0.52, reward 0.325, reward_std 0.45, zero_std_ratio 0, kl 0,
+train_loss 2.98e-8`.
+- **`loss≈0` with `grad_norm>0` is correct GRPO** — advantages are mean-centered (ΣA=0 ⇒ loss value ~0),
+  but the gradient `ΣAᵢ·∇log π(oᵢ)` is non-zero and finite. The loop learns-ready, no OOM.
+- **Reward variance is real** (std 0.45, zero_std_ratio 0): one of 4 completions scored ~1.0 (a correct
+  answer from the *un-trained* model) → a meaningful advantage. Reward + KL wiring confirmed live.
+- **Timing (V100):** ~66.5s / 2 steps, generation-dominated. A100/H200 (Rung A) ~2–4× faster; the whole
+  stack fit in 32GB → ample headroom for larger batches on bigger GPUs.
+
+**→ Gate G1-RL CLOSED.**
+
+## What's next — Phase 2, Rung-A RL run (Gate G-RL)
+The headline: does held-out Countdown accuracy rise above the **21.48%** baseline? Plan: RL from
+LLaDA-8B-Instruct (LoRA r128 + 4-bit), `diffusion_steps` 64 (NfePareto-cut), G 4–6, ~256-prompt subset,
+checkpoint-resume across 8h `gpu` jobs (A100/H200), eval the trained adapter vs baseline with d1's `eval/`.
+First job also yields the real A100/H200 per-step timing to finalize the step budget.
