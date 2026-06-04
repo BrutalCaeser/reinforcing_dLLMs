@@ -69,11 +69,14 @@ conda activate "$PREFIX"
 python -c "import sys; print('python', sys.version)"
 
 # ---- pip deps (d1 env.yml pip section; flash-attn intentionally omitted) ----
+# NOTE: wandb 0.15.3 imports `pkg_resources`, which setuptools>=81 removed. conda create
+# pulls a current setuptools (82.x) -> `ModuleNotFoundError: No module named 'pkg_resources'`
+# at `import wandb`. Pin setuptools<81 to keep pkg_resources. (Found via the Phase-1 RL smoke.)
 pip install --no-input \
   "torch==2.6.0" torchvision torchaudio \
   "transformers==4.49.0" "accelerate==1.4.0" "bitsandbytes==0.45.3" "peft==0.15.1" \
   "git+https://github.com/huggingface/trl.git@0f88c179e30b3439467942a08c3190f624d5c423" \
-  "deepspeed==0.16.4" "datasets==3.3.2" "tiktoken==0.9.0" "wandb==0.15.3" \
+  "deepspeed==0.16.4" "datasets==3.3.2" "tiktoken==0.9.0" "wandb==0.15.3" "setuptools<81" \
   sentencepiece evaluate scipy tqdm regex scikit-learn pandas 2>&1 | tail -25
 
 # ---- verify ----

@@ -34,8 +34,11 @@ mkdir -p "$P/logs" "$P/results/tiny_rl"
 
 echo "node:$(hostname) date:$(date) model=$MODEL"
 module load anaconda3/2024.06
+module load cuda/12.8.0                                    # trl GRPOTrainer imports deepspeed, whose
+export CUDA_HOME=${CUDA_HOME:-/shared/EL9/explorer/cuda/12.8.0}  # import-time op check needs CUDA_HOME (major 12 = torch cu124)
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate "$P/envs/d1"
+echo "CUDA_HOME=$CUDA_HOME"
 
 python -c "import torch,trl,peft,bitsandbytes;assert torch.cuda.is_available();print('OK',torch.cuda.get_device_name(0),'trl',trl.__version__)" || { echo "ENV FAIL"; exit 1; }
 
