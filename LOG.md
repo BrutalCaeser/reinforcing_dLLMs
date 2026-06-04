@@ -7,6 +7,20 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Phase 2 Rung-A run #1 (7428265): NEGATIVE — no reward lift (under-trained)
+
+Full run completed clean (h200, rc=0, ~42 min, 1500 steps, checkpoints every 24). **Reward flat ~0.30
+across all 250 generation rounds** (first-25 mean 0.313, last-25 0.321; from `checkpoint-1500/trainer_state.json`
+— stdout was buffer-truncated to 18 lines, history is complete). ~0.30 ≈ the base model's level (21% baseline).
+**Honest result: no learning.**
+- **Diagnosis = sizing, not method:** 1500 steps = 0.1% of an epoch → each of ~250 prompts seen once (×6
+  reuse) ≈ 250 one-shot updates on an 8B model (d1: thousands of prompts × 10 epochs × 8 GPUs). Plus many
+  rounds had `reward_std=0` (all G=4 equal) → advantage 0 → zero gradient.
+- **Next: run #2 = mechanism demo, properly sized** — small FIXED prompt subset (~64) revisited over many
+  epochs so the policy can fit them; needs a thin wrapper `exp/rungA_train.py` (d1's script hardcodes the
+  full set). Raise G→6, LR→1e-5. If reward rises → eval checkpoint vs 21.48% (the real Gate G-RL).
+- Loop itself is validated (grad finite, kl ~0.03 rising off ref); this is an experiment-design fix.
+
 ## 2026-06-04 — Phase 2 Rung-A: calibration PASS (h200) + full run launched
 
 Calibration (12 steps, real knobs) took 4 tries — all GPU/memory/infra, none the RL code:

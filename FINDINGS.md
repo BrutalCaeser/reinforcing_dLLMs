@@ -4,7 +4,7 @@ Living results & analysis. Every gate's **numbers** and an **honest interpretati
 result lands (even partial or negative). The "why" behind the methods is in `theory.md`; the plan is in
 `SPEC.md`; the chronological trail is in `LOG.md`.
 
-**Status:** **Gate G1-RL CLOSED** — checks 1 (estimator), 2 (rewards), 3 (tiny RL loop) all **PASS**. Next: **Phase 2 — Rung-A RL run** (Gate G-RL).
+**Status:** Phase 2 Rung-A run #1 = **NEGATIVE (no lift, under-trained)** — reward flat ~0.30 over 250 prompts. Next: run #2 (small fixed prompt subset, many epochs) — the properly-sized mechanism demo. See Gate G-RL below.
 
 | Gate | Question | Verdict |
 |---|---|---|
@@ -13,7 +13,8 @@ result lands (even partial or negative). The "why" behind the methods is in `the
 | G1-RL (1) | Does d1's one-step log-prob estimator hold up vs the ELBO? | ✅ **ALL PASS** (ranking 1.0, bias +0.10, noise cancels) |
 | G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
 | G1-RL (3) | Does the full RL loop run (no OOM, finite loss, grad flows)? | ✅ **PASS** (V100, rc=0; loss≈0 w/ grad_norm 1.47; reward var real) |
-| G-RL | Does RL raise held-out accuracy over baseline? | ⏳ pending (Phase 2) |
+| G-RL #1 | Did 1500-step run lift reward? | ❌ **NO** — flat ~0.30 (under-trained: 250 one-shot prompts) |
+| G-RL #2 | Does small-fixed-subset run lift reward? | ⏳ next (mechanism demo, properly sized) |
 
 ---
 
@@ -151,8 +152,30 @@ train_loss 2.98e-8`.
 
 **→ Gate G1-RL CLOSED.**
 
-## What's next — Phase 2, Rung-A RL run (Gate G-RL)
-The headline: does held-out Countdown accuracy rise above the **21.48%** baseline? Plan: RL from
-LLaDA-8B-Instruct (LoRA r128 + 4-bit), `diffusion_steps` 64 (NfePareto-cut), G 4–6, ~256-prompt subset,
-checkpoint-resume across 8h `gpu` jobs (A100/H200), eval the trained adapter vs baseline with d1's `eval/`.
-First job also yields the real A100/H200 per-step timing to finalize the step budget.
+## Gate G-RL — Rung-A run #1 (job 7428265): NEGATIVE (no lift) — under-trained
+
+LLaDA-8B-Instruct + LoRA r128/4-bit, diffusion_steps 64, G=4, max_completion 128, μ=6, **max_steps 1500**,
+h200, rc=0, ~42 min. Loop healthy (grad finite, kl ~0.03 rising off ref, checkpoints every 24). **But the
+reward did NOT rise** (`trainer_state.json`, 250 generation rounds):
+
+| window | mean reward |
+|---|---|
+| first 25 rounds | 0.313 |
+| rounds 100–150 | 0.296 |
+| **last 25 rounds** | **0.321** |
+| overall | 0.299 (max 1.0; fully-correct rounds 1/125 early vs 2/125 late) |
+
+**Flat at ~0.30 ≈ the base model's level** (consistent with the 21% baseline). Honest read: **no learning yet.**
+
+**Diagnosis — sizing, not (yet) method:**
+1. 1500 steps = **0.1% of one epoch** → each of ~250 prompts seen **once** (×6 reuse) → ~250 one-shot
+   updates on an 8B model. d1 used thousands of prompts × 10 epochs × 8 GPUs. Far too little signal.
+2. Many rounds have `reward_std=0` (all G=4 completions equal) → **advantage 0 → zero gradient** → effective
+   signal even sparser.
+
+**Next — Rung-A run #2 (mechanism demo, properly sized):** train on a **small FIXED prompt subset** (≈64
+prompts) for **many** rounds (revisit them, several epochs) so the policy can actually fit them — the
+clean "can diffu-GRPO move reward at all" test. Needs a thin wrapper (`exp/rungA_train.py`) to cap the
+train subset (d1's script hardcodes the full set). Likely also raise G→6 (better advantage) and LR→1e-5.
+If reward rises on the fixed set → eval that checkpoint vs 21.48% (the real Gate G-RL). If it *still* won't
+move, escalate the investigation (LR, estimator variance, KL β). Run #1 kept on record — honest negatives stay.
