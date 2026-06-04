@@ -1,0 +1,39 @@
+# Heavy / regenerable — live on /scratch on Explorer, never commit
+envs/
+hf/
+d1/
+checkpoints/
+*.ckpt
+*.pt
+*.safetensors
+conda-pkgs/
+condahome/
+wandb/
+outputs/
+slurm/
+
+# Logs (curated summaries go in LOG.md)
+logs/
+*.log
+slurm-*.out
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# macOS junk (Crucial_X9 is exFAT → AppleDouble + Finder metadata)
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Results: keep small CSV/JSON/PNG, ignore large dumps
+results/**/*.npy
+results/**/*.npz
+results/rollouts/
