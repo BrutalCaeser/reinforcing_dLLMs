@@ -2,8 +2,8 @@
 
 **Owner:** Yashvardhan Gupta · **Started:** 2026-06-03 · **Cluster:** Northeastern Explorer
 **Predecessors:** [NfePareto] (NFE axis — COMPLETE; fixes our rollout-NFE budget), [BlockPareto] (block axis).
-**Full design + feasibility ladder:** `~/Documents/wiki/wiki/projects/DiffuGRPO.md` (the playbook).
-**RL primer (PPO/GRPO/DPO + worked GRPO update):** `~/Documents/wiki/wiki/concepts/rl-for-llms.md`.
+**Scope:** independent, constrained-compute reproduction of d1's diffu-GRPO + a planned novel block-diffusion port.
+The feasibility ladder (cheap-mechanism → faithful → novel) and decision gates are in §2–3 below.
 
 > This file is the **recon-grounded execution spec** (Phase 0 output): the *verified* d1 recipe,
 > the **compute go/no-go decision**, and the reduced **Rung-A** plan. The full 11-layer system design

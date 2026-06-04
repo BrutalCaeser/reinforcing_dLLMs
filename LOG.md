@@ -1,6 +1,6 @@
 # Engineering Log — DiffuGRPO (RL for Diffusion LLMs)
 
-Newest at top. Wiki mirror: `~/Documents/wiki/wiki/projects/DiffuGRPO.md`. RL primer: `concepts/rl-for-llms.md`.
+Newest at top. Running engineering/devops log: what ran, where, the result, and the decision.
 
 ---
 

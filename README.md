@@ -4,8 +4,12 @@
 > to block-diffusion?** This is the capability-frontier sequel to [BlockPareto] (block size) and
 > [NfePareto] (denoising steps), and one of the **two techniques Inception's Mercury is confirmed to use**.
 
-**Status:** Phase 0 (recon + compute go/no-go) — in progress. Full plan: `SPEC.md`; design playbook + feasibility
-ladder: `~/Documents/wiki/wiki/projects/DiffuGRPO.md`; RL fundamentals: `~/Documents/wiki/wiki/concepts/rl-for-llms.md`.
+> ⚠️ **Work in progress — building in the open.** This is an **independent, constrained-compute
+> reproduction** of d1's diffu-GRPO (not the original method), plus a planned novel block-diffusion port.
+> Currently at **Phase 0** (recon + compute go/no-go); **no RL results yet**. Full plan + the feasibility
+> ladder + decision gates are in **`SPEC.md`**.
+
+**Related:** sister study on the *inference* axes (block size × denoising steps) — [block-diffusion-pareto](https://github.com/BrutalCaeser/block-diffusion-pareto).
 
 ## The recipe (verified from d1 @ `6f5abf5`)
 - **diffu-GRPO** = GRPO (critic-free, group-relative advantage, clipped surrogate + KL) with a **one-step
