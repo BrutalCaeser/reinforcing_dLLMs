@@ -7,6 +7,16 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Phase 2 Rung-A: calibration PASS (h200) + full run launched
+
+Calibration (12 steps, real knobs) took 4 tries — all GPU/memory/infra, none the RL code:
+1. a100-pinned → est start *tomorrow* (a100/h200 100% allocated). → switch to any-GPU.
+2. any-GPU → V100 → **OOM at max_completion 256** (4× the smoke's 64 on a 32GB card). → cut to **128** (also matches eval gen_length 128 → length-consistent with the 21.48% baseline).
+3. any-GPU → T4 (16GB) → **`LLaDAModelLM does not support gradient_checkpointing`** at trainer init. → drop GC; pin a real 32GB+ GPU.
+4. **h200 (7428195) PASS** rc=0, 2:27 wall: fits, no OOM, **checkpoint-12 saved** (resume works). `train_runtime 24.6s/12 steps ≈ 2 s/step` on h200; grad_norm 0.0026→0.0015 (settling), kl ~0.001 rising (policy moving off ref), train_loss −0.023. Healthy.
+- **GPU-scheduling lessons (Explorer):** a100/h200 routinely 100% allocated → pinning them queues ~1 day. Use `sbatch --test-only` to compare start times; `--gres=gpu:1` (any) backfills fastest but can land on a 16GB T4; **pin the *abundant* type that fits** (`v100-sxm2` 32GB, ~16 nodes) or whichever `--test-only` shows soonest (here h200 @13:38). `gpu-short` is deprioritized behind `gpu` on shared nodes. courses-gpu (1-day, idle p100s 16GB) is the >8h fallback. All baked into `exp/rungA.sbatch` header.
+- **Full run launched: 7428265** (h200, `max_steps 1500` ≈ ~250 unique prompts at μ=6, save_steps 24, checkpoint-resume). ~50 min on h200. Watching the **reward trajectory** — the headline: does it rise above the baseline-equivalent? Then eval the adapter vs 21.48%.
+
 ## 2026-06-04 — Gate G1-RL check 3 (tiny RL smoke) PASS → **Gate G1-RL CLOSED**
 
 Ran d1's actual trainer end-to-end (shrunk: G=4, max_completion 64, diffusion_steps 32, num_iterations 2,
