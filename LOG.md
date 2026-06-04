@@ -20,7 +20,8 @@ cap realized epochs <10 `[UNVERIFIED]`.) Answers "were d1's prompts repeated?" �
 `global_step=2000`, `2000%6=2≠0` → reuse-empty-buffer → None. **A GRPO checkpoint is resumable only if
 `global_step % μ == 0`** (d1's train.py warns this). checkpoint-2000 = forced final-save at max_steps
 (μ-misaligned). **Fix: resume from checkpoint-1920** (1920%6=0). **Extension v2 = job 7439596** (resume 1920 →
-max_steps 6000). Verification of clean resume in flight.
+max_steps 6000). **Verified:** v2 RUNNING on d4053, **0 tracebacks** past v1's 95s crash point → resume
+FIXED (μ-divisible checkpoint works); continuing the 32-prompt curve from step 1920 toward 6000.
 
 ## 2026-06-04 — Run #2 FINISHED: late reward UPTICK (preliminary POSITIVE) → extend it; defer run #3 chain
 
