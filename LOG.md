@@ -7,6 +7,26 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Run #2 FINISHED: late reward UPTICK (preliminary POSITIVE) → extend it; defer run #3 chain
+
+Run #2 (32 fixed prompts) completed 2000/2000. **Reward rose late:** per-epoch [.246,.285,.289,.246,.296,
+.274,.30,.292,.259,**.334**,**.465**]; first-10 rounds 0.245 → last-10 0.478 (~16%→42% completions correct).
+**diffu-GRPO IS moving reward** — slowly, via repetition (lift only after ~10 passes). Caveats: 32 memorized
+prompts (mechanism, not generalization); small tail sample. **Corrects my mid-run "soft negative"** (premature)
+and walks back the "low-fidelity starves signal" diagnosis — the signal needed more passes (run #3's live log
+even shows `zero_std_ratio 0.0`).
+- **Decisive lesson:** run #1 (single pass) flat vs run #2 (×11) rising → reward moves by **revisiting** a
+  fixed set (as d1 did: 250k × 10 epochs), not single-pass volume.
+- **Decision (user-confirmed):** **extend run #2**, not the run #3 fresh-prompt 5-leg chain. Submitted **run #2
+  EXTENSION (job 7438917)**: resume checkpoint-2000 → max_steps 6000 (~+21 epochs, LR 1e-5, save/epoch). Watching
+  whether reward climbs toward ~1.0 (clean proof) or plateaus.
+- **Run #3 leg 1 (7437645) left RUNNING** as a single-pass d1-faithful datapoint — healthy (no OOM @ maxcomp
+  256; `reward_std 0.46, zero_std_ratio 0.0` → 128-step/256-len rollout gives non-zero advantages from the
+  start, unlike run #1). 5-leg chain **deferred** (single-pass = wrong lever). **Resume-gap note:** d1's
+  `diffu_grpo_train.py` calls `trainer.train()` with NO resume arg (silent no-op); `exp/rungA_train.py` wrapper
+  fixes it (explicit `resume_from_checkpoint`) — relevant if we ever chain. LR confirmed **constant** (`lr 3e-6`
+  in-log) → max_steps can differ across resumes safely.
+
 ## 2026-06-04 — Rung-A run #2 (7431403) flat → run #3 (7437645) QUEUED: isolate rollout fidelity
 
 **Run #2 (32 fixed prompts, G6, μ6, LR 1e-5, diffusion_steps 64, max_comp 128, h200):** the overfit-sized

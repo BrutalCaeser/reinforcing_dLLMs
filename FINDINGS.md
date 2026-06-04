@@ -4,7 +4,7 @@ Living results & analysis. Every gate's **numbers** and an **honest interpretati
 result lands (even partial or negative). The "why" behind the methods is in `theory.md`; the plan is in
 `SPEC.md`; the chronological trail is in `LOG.md`.
 
-**Status:** Phase 2 Rung-A — run #1 (full set, low-fidelity rollout) & run #2 (32 fixed prompts, low-fidelity) **both flat ~0.27–0.30** (no lift). Run #3 **queued** (job 7437645, h200): the *d1-faithful-rollout* slice — full fresh set, diffusion_steps 128 / max_comp 256 / G6 / μ8 — to isolate **rollout fidelity** as the lever. See Gate G-RL below.
+**Status:** Phase 2 Rung-A — **run #2 (32 fixed prompts) shows a late reward UPTICK (0.25→0.48, ~16%→42% correct) → PRELIMINARY POSITIVE: diffu-GRPO moves reward via _repetition_.** Now **extending run #2** (job 7438917) toward saturation — the mechanism proof. Run #3 leg 1 (job 7437645) left running as a single-pass d1-faithful datapoint; its 5-leg chain **deferred** (single-pass volume = wrong lever, per run #2). See Gate G-RL below.
 
 | Gate | Question | Verdict |
 |---|---|---|
@@ -13,9 +13,10 @@ result lands (even partial or negative). The "why" behind the methods is in `the
 | G1-RL (1) | Does d1's one-step log-prob estimator hold up vs the ELBO? | ✅ **ALL PASS** (ranking 1.0, bias +0.10, noise cancels) |
 | G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
 | G1-RL (3) | Does the full RL loop run (no OOM, finite loss, grad flows)? | ✅ **PASS** (V100, rc=0; loss≈0 w/ grad_norm 1.47; reward var real) |
-| G-RL #1 | Did 1500-step run (full set, 64-step rollout) lift reward? | ❌ **NO** — flat ~0.30 (250 one-shot prompts) |
-| G-RL #2 | Does a 32-prompt fixed subset (64-step rollout) lift reward? | ❌ **NO** — flat ~0.27 (frac≥0.9 ≈ 0) |
-| G-RL #3 | Does a d1-faithful rollout (128 steps/256 len/G6) on the full fresh set lift reward? | ⏳ **queued** (job 7437645, h200) |
+| G-RL #1 | Did 1500-step run (full set, single-pass) lift reward? | ❌ **NO** — flat ~0.30 (250 one-shot prompts) |
+| G-RL #2 | Does a 32-prompt fixed subset (revisited) lift reward? | ✅ **YES (late)** — 0.25→0.48 over 11 epochs (mechanism) |
+| G-RL #2-ext | Does it keep climbing toward ~1.0 (clean proof)? | ⏳ **running** (job 7438917) |
+| G-RL #3 | Does a d1-faithful **single-pass** full-set run lift? | ⏳ leg 1 running (job 7437645); chain deferred |
 
 ---
 
@@ -181,32 +182,52 @@ train subset (d1's script hardcodes the full set). Likely also raise G→6 (bett
 If reward rises on the fixed set → eval that checkpoint vs 21.48% (the real Gate G-RL). If it *still* won't
 move, escalate the investigation (LR, estimator variance, KL β). Run #1 kept on record — honest negatives stay.
 
-## Gate G-RL — Rung-A run #2 (job 7431403): NEGATIVE (no lift) — fixed-subset overfit didn't move reward
+## Gate G-RL — Rung-A run #2 (job 7431403): PRELIMINARY POSITIVE — late reward uptick on the fixed subset
 
 Mechanism-demo design: train a **small FIXED subset (32 Countdown prompts)** over many epochs (G=6, μ=6,
-LR **1e-5**, diffusion_steps 64, max_completion 128, h200) so the policy could overfit them — the cleanest
-"can diffu-GRPO move reward *at all*" test. Wrapper `exp/rungA_train.py` caps the train set (d1's script
-hardcodes the full set). **Reward stayed flat** (through step 1344/2000):
+LR **1e-5**, diffusion_steps 64, max_completion 128, h200) so the policy could fit them — the cleanest
+"can diffu-GRPO move reward *at all*" test. Wrapper `exp/rungA_train.py` caps the train set. **Completed
+2000/2000 steps (~11 passes over the 32 prompts). Reward was flat for ~9 epochs, then rose:**
 
-| per-epoch (32 prompts) | mean reward | frac ≥0.9 |
-|---|---|---|
-| epoch 1–7 | [0.246, 0.285, 0.289, 0.246, 0.296, 0.274, 0.30] | ≈ 0 (one lucky 1.0) |
-| overall | **0.277** | — |
+| epoch (32 rounds) | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | **10** | **11** |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| mean reward | .246 | .285 | .289 | .246 | .296 | .274 | .30 | .292 | .259 | **.334** | **.465** |
 
-**Soft NEGATIVE.** Even an overfit-sized run on 32 prompts didn't lift reward. Let it finish for the record;
-**not** evaluating the checkpoint (it would predictably score ~21%).
+- **first-10 rounds 0.245 → last-10 rounds 0.478** (≈2×). Decoding (reward ∈ {0.1 valid-but-wrong, 1.0
+  correct}): fraction-correct rose from **~16% → ~42%** of completions — the policy is **starting to solve
+  the fixed set.**
+- `frac ≥0.9` still ≈ 0: no round is ~all-6 correct yet — the gain is more rounds landing 2–3/6.
 
-**Read across runs #1 + #2 — the missing-signal diagnosis:** both used a **low-fidelity rollout**
-(diffusion_steps 64, max_completion 128, G 4/6). The base model is weak (~20% on Countdown) → at low rollout
-fidelity, in most groups **all G completions are wrong** (reward 0.1) → `reward_std = 0` → **advantage 0 →
-zero gradient**. Neither volume (run #1) nor revisiting (run #2) can manufacture signal the rollouts never
-produced. This points to **rollout fidelity** — not data volume or LR — as the next lever to test.
+**Verdict: PRELIMINARY POSITIVE — diffu-GRPO *is* moving reward, just slowly (lift emerged only after ~10
+passes).** Caveats before over-reading: (1) it's on **32 memorized prompts** → proves the *mechanism*, not
+generalization; (2) small sample at the tail (epoch 11 ≈ 14 rounds).
 
-## Gate G-RL — Rung-A run #3 (job 7437645, QUEUED): isolate rollout fidelity (d1-faithful slice)
+**Honest correction (kept on record):** my mid-run read (through step 1344 / epoch 7) called this a "soft
+negative" — that was **premature**; the signal showed up late. It also walks back the earlier "low-fidelity
+rollouts starve the signal" diagnosis (`reward_std=0` → zero advantage): the signal *was* there, it just
+needed more **passes**. (Note: run #3's live log later shows `zero_std_ratio 0.0` even at 64→128 fidelity,
+so zero-advantage starvation was over-stated.)
 
-The hypothesis from runs #1/#2: low-fidelity rollouts starve GRPO of advantage signal. Run #3 **raises the
-rollout to d1's exact fidelity** and runs it on the **full, fresh** Countdown set (diverse prompts, no
-revisiting) — the largest *faithful* slice one 8h H200 allows.
+**The decisive lesson — repetition, not single-pass volume:** run #1 (full set, each prompt once) = flat;
+run #2 (32 prompts ×11) = rising. Reward moves by **revisiting** a fixed set — exactly what d1 did (250k
+prompts × **10 epochs**). → **Next: extend run #2** (ride the win), not the fresh-prompt chain.
+
+### Run #2 EXTENSION (job 7438917): resume → ~+21 epochs toward saturation
+Resume `checkpoint-2000`, continue the same 32 prompts to `max_steps 6000` (LR 1e-5, save every epoch).
+**Question:** does reward keep climbing toward ~1.0 (clean mechanism proof) or plateau (the model's ceiling
+on those 32)? Either is a definitive, honest result — and a strong "I reproduced diffu-GRPO" outreach artifact.
+
+## Gate G-RL — Rung-A run #3 (job 7437645, leg 1 RUNNING): isolate rollout fidelity (d1-faithful slice)
+
+Run #3 **raises the rollout to d1's exact fidelity** and runs it on the **full** Countdown set (single pass,
+no revisiting) — the largest *faithful* slice one 8h H200 allows.
+
+**Leg 1 status (live):** healthy on h200 — **no OOM at max_comp 256**; training with `reward_std ≈ 0.46,
+zero_std_ratio 0.0, completion_length ≈ 227, kl ≈ 0.003, lr 3e-6 (constant)`. The d1-fidelity rollout
+produces **non-zero advantages from the start** (contrast run #1's many zero-advantage rounds) — mild early
+support for the fidelity angle. But it's **single-pass**, and run #2 just showed reward moves via
+*repetition*, so **the planned 5-leg resume-chain is DEFERRED** and the GPU budget redirected to extending
+run #2. Leg 1 is left running as a single-pass datapoint (does higher fidelity alone lift, vs run #1's flat?).
 
 | knob | d1 (target) | run #2 (flat) | **run #3** |
 |---|---|---|---|
