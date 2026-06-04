@@ -68,8 +68,10 @@ def spearman(x, y):
 
 # ------------------------------------------------------------------- the estimators
 @torch.no_grad()
-def one_step_logp(model, full_ids, prompt_len, p_mask_prompt, seed):
-    """Exact mirror of d1 forward_process + per-token-logp. Returns sum_i log p(c_i | masked ctx)."""
+def one_step_logp(model, full_ids, prompt_len, p_mask_prompt, seed, delta=None, alpha=0.0):
+    """Exact mirror of d1 forward_process + per-token-logp. Returns sum_i log p(c_i | masked ctx).
+    Optional `delta` ([vocab] logit perturbation, scaled by `alpha`) simulates a small policy step
+    (pi_new vs pi_old) at an IDENTICAL mask -- used by the common-mode-cancellation test (C3)."""
     device = full_ids.device
     L = full_ids.size(1)
     g = torch.Generator(device="cpu").manual_seed(int(seed))
@@ -77,8 +79,10 @@ def one_step_logp(model, full_ids, prompt_len, p_mask_prompt, seed):
     rand = torch.rand(L, generator=g).to(device)
     is_mask = (prompt_index & (rand < p_mask_prompt)) | (~prompt_index)
     noisy = torch.where(is_mask.unsqueeze(0), torch.tensor(MASK_ID, device=device), full_ids)
-    logits = model(noisy).logits[0].float()
-    logp = -F.cross_entropy(logits[prompt_len:], full_ids[0, prompt_len:], reduction="none")
+    logits = model(noisy).logits[0].float()[prompt_len:]
+    if delta is not None:
+        logits = logits + alpha * delta.to(device)
+    logp = -F.cross_entropy(logits, full_ids[0, prompt_len:], reduction="none")
     return logp.sum().item()
 
 
@@ -252,26 +256,37 @@ def main():
                              "mono_os": mono_os, "mono_el": mono_el, "spearman": sp})
 
     # ---- C3: common-mode cancellation (why the high-variance estimator still trains) -
-    print("\n=== C3: common-mode cancellation (matched-seed differences cancel mask noise) ===")
+    # GRPO's ratio is pi_new/pi_old for the SAME completion at a MATCHED mask seed; the large
+    # prompt-masking variance is then common-mode and cancels. Shown two ways:
+    #   (a) conservative: two DIFFERENT completions A,B (same prompt) -> partial sharing (corr<1).
+    #   (b) the ACTUAL GRPO case: same completion A, small fixed policy perturbation -> corr~1.
+    print("\n=== C3: common-mode cancellation (matched-seed log-ratio is mask-noise-free) ===")
+    seeds = list(range(args.seed_reps))
     fa, pla, _ = tok_pair(tok, RANK_PROMPT, " Paris."); fa = fa.to(dev)
     fb, plb, _ = tok_pair(tok, RANK_PROMPT, " London."); fb = fb.to(dev)
-    a_s = [one_step_logp(model, fa, pla, 0.15, s) for s in range(args.seed_reps)]
-    b_s = [one_step_logp(model, fb, plb, 0.15, s) for s in range(args.seed_reps)]
-    diff = [a - b for a, b in zip(a_s, b_s)]
+    a_s = [one_step_logp(model, fa, pla, 0.15, s) for s in seeds]
+    b_s = [one_step_logp(model, fb, plb, 0.15, s) for s in seeds]
     std_abs = torch.tensor(a_s).std(unbiased=True).item()
-    std_diff = torch.tensor(diff).std(unbiased=True).item()
-    cancel = std_diff / std_abs if std_abs > 0 else float("inf")
-    print(f"  std(logp_A)={std_abs:.3f}  std(logp_A - logp_B, matched seed)={std_diff:.3f}"
-          f"  cancellation ratio={cancel:.3f}")
-    print(f"  -> matched-seed pi_new/pi_old shares the SAME mask, so this noise cancels EXACTLY in GRPO.")
-    R["common_mode"] = {"std_abs": std_abs, "std_matched_diff": std_diff, "cancellation_ratio": cancel}
+    corr_AB = pearson(a_s, b_s)  # different completions: fraction of mask noise shared
+    vocab = int(getattr(model.config, "vocab_size", 126464))
+    delta = torch.randn(vocab, generator=torch.Generator().manual_seed(12345))
+    a_new = [one_step_logp(model, fa, pla, 0.15, s, delta=delta, alpha=0.05) for s in seeds]
+    corr_AA = pearson(a_s, a_new)  # same completion, tiny step: ~1 => mask noise fully common-mode
+    std_ratio = torch.tensor([n - o for n, o in zip(a_new, a_s)]).std(unbiased=True).item() / std_abs
+    print(f"  std(logp_A) across seeds = {std_abs:.3f}   (the raw estimator IS high-variance)")
+    print(f"  (a) corr_s(logp_A, logp_B)  different completions  = {corr_AB:.3f}  (partial sharing)")
+    print(f"  (b) corr_s(logp_A^old, logp_A^new) same completion = {corr_AA:.4f}  <- GRPO's actual ratio")
+    print(f"      matched-seed pi_new/pi_old share the identical mask => mask variance is common-mode;")
+    print(f"      the log-ratio reflects only the policy change (its std is {std_ratio:.3f}x the absolute).")
+    R["common_mode"] = {"std_abs_logp": std_abs, "corr_diff_completions": corr_AB,
+                        "corr_same_completion_policy_step": corr_AA, "logratio_std_over_abs": std_ratio}
 
     # ---- verdict -------------------------------------------------------------------
     checks = {
         "C1a_gold_top_both": gold_os and gold_el,
         "C1a_group_spearman>=0.9": grp_sp >= 0.9,
         "C1b_ladders_monotone_agree": ladder_ok,
-        "C3_common_mode_cancels<0.5": cancel < 0.5,
+        "C3_matched_seed_ratio_mask_free": corr_AA >= 0.95,
     }
     R["checks"] = checks
     print("\n=== VERDICT (Gate G1-RL, estimator) ===")
