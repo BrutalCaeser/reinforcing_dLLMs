@@ -20,7 +20,7 @@
 # =============================================================================
 #SBATCH --job-name=rungA
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:v100-sxm2:1
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
@@ -44,7 +44,8 @@ MAXCOMP=${MAXCOMP:-128}         # max completion length: 128 fits a 32GB V100 AN
                                 #   (d1 used 256 on 8xA100; 256 OOMs a V100 -> we fit the common GPU)
 PERDEV=${PERDEV:-4}             # per_device_train_batch_size (=G -> 1 prompt/step)
 NUMITER=${NUMITER:-6}           # mu, GRPO inner updates per generation; d1=12
-GC=${GC:-True}                  # gradient_checkpointing: big activation-memory cut -> fits V100
+# NOTE: LLaDAModelLM does NOT support gradient_checkpointing (verified) -> rely on max_completion 128
+#       fitting a 32GB V100; if it OOMs, drop MAXCOMP to 96. Do NOT pass --gradient_checkpointing.
 MAXSTEPS=${MAXSTEPS:-12}        # optimizer steps; calibration=12, full run >=150
 SAVESTEPS=${SAVESTEPS:-24}      # divisible by NUMITER (6) per d1's resume note
 RESUME=${RESUME:-False}
@@ -70,7 +71,6 @@ accelerate launch --num_processes 1 --num_machines 1 --mixed_precision bf16 --dy
     --gradient_accumulation_steps 1 \
     --diffusion_steps "$DIFFSTEPS" --block_length 32 --max_completion_length "$MAXCOMP" --max_prompt_length 200 \
     --num_iterations "$NUMITER" --max_steps "$MAXSTEPS" \
-    --gradient_checkpointing "$GC" \
     --learning_rate 3e-6 --beta 0.04 --epsilon 0.5 \
     --save_strategy steps --save_steps "$SAVESTEPS" --save_total_limit 3 \
     --resume_from_checkpoint "$RESUME" \
