@@ -4,7 +4,7 @@ Living results & analysis. Every gate's **numbers** and an **honest interpretati
 result lands (even partial or negative). The "why" behind the methods is in `theory.md`; the plan is in
 `SPEC.md`; the chronological trail is in `LOG.md`.
 
-**Status:** Phase 2 Rung-A run #1 = **NEGATIVE (no lift, under-trained)** — reward flat ~0.30 over 250 prompts. Next: run #2 (small fixed prompt subset, many epochs) — the properly-sized mechanism demo. See Gate G-RL below.
+**Status:** Phase 2 Rung-A — run #1 (full set, low-fidelity rollout) & run #2 (32 fixed prompts, low-fidelity) **both flat ~0.27–0.30** (no lift). Run #3 **queued** (job 7437645, h200): the *d1-faithful-rollout* slice — full fresh set, diffusion_steps 128 / max_comp 256 / G6 / μ8 — to isolate **rollout fidelity** as the lever. See Gate G-RL below.
 
 | Gate | Question | Verdict |
 |---|---|---|
@@ -13,8 +13,9 @@ result lands (even partial or negative). The "why" behind the methods is in `the
 | G1-RL (1) | Does d1's one-step log-prob estimator hold up vs the ELBO? | ✅ **ALL PASS** (ranking 1.0, bias +0.10, noise cancels) |
 | G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
 | G1-RL (3) | Does the full RL loop run (no OOM, finite loss, grad flows)? | ✅ **PASS** (V100, rc=0; loss≈0 w/ grad_norm 1.47; reward var real) |
-| G-RL #1 | Did 1500-step run lift reward? | ❌ **NO** — flat ~0.30 (under-trained: 250 one-shot prompts) |
-| G-RL #2 | Does small-fixed-subset run lift reward? | ⏳ next (mechanism demo, properly sized) |
+| G-RL #1 | Did 1500-step run (full set, 64-step rollout) lift reward? | ❌ **NO** — flat ~0.30 (250 one-shot prompts) |
+| G-RL #2 | Does a 32-prompt fixed subset (64-step rollout) lift reward? | ❌ **NO** — flat ~0.27 (frac≥0.9 ≈ 0) |
+| G-RL #3 | Does a d1-faithful rollout (128 steps/256 len/G6) on the full fresh set lift reward? | ⏳ **queued** (job 7437645, h200) |
 
 ---
 
@@ -179,3 +180,53 @@ clean "can diffu-GRPO move reward at all" test. Needs a thin wrapper (`exp/rungA
 train subset (d1's script hardcodes the full set). Likely also raise G→6 (better advantage) and LR→1e-5.
 If reward rises on the fixed set → eval that checkpoint vs 21.48% (the real Gate G-RL). If it *still* won't
 move, escalate the investigation (LR, estimator variance, KL β). Run #1 kept on record — honest negatives stay.
+
+## Gate G-RL — Rung-A run #2 (job 7431403): NEGATIVE (no lift) — fixed-subset overfit didn't move reward
+
+Mechanism-demo design: train a **small FIXED subset (32 Countdown prompts)** over many epochs (G=6, μ=6,
+LR **1e-5**, diffusion_steps 64, max_completion 128, h200) so the policy could overfit them — the cleanest
+"can diffu-GRPO move reward *at all*" test. Wrapper `exp/rungA_train.py` caps the train set (d1's script
+hardcodes the full set). **Reward stayed flat** (through step 1344/2000):
+
+| per-epoch (32 prompts) | mean reward | frac ≥0.9 |
+|---|---|---|
+| epoch 1–7 | [0.246, 0.285, 0.289, 0.246, 0.296, 0.274, 0.30] | ≈ 0 (one lucky 1.0) |
+| overall | **0.277** | — |
+
+**Soft NEGATIVE.** Even an overfit-sized run on 32 prompts didn't lift reward. Let it finish for the record;
+**not** evaluating the checkpoint (it would predictably score ~21%).
+
+**Read across runs #1 + #2 — the missing-signal diagnosis:** both used a **low-fidelity rollout**
+(diffusion_steps 64, max_completion 128, G 4/6). The base model is weak (~20% on Countdown) → at low rollout
+fidelity, in most groups **all G completions are wrong** (reward 0.1) → `reward_std = 0` → **advantage 0 →
+zero gradient**. Neither volume (run #1) nor revisiting (run #2) can manufacture signal the rollouts never
+produced. This points to **rollout fidelity** — not data volume or LR — as the next lever to test.
+
+## Gate G-RL — Rung-A run #3 (job 7437645, QUEUED): isolate rollout fidelity (d1-faithful slice)
+
+The hypothesis from runs #1/#2: low-fidelity rollouts starve GRPO of advantage signal. Run #3 **raises the
+rollout to d1's exact fidelity** and runs it on the **full, fresh** Countdown set (diverse prompts, no
+revisiting) — the largest *faithful* slice one 8h H200 allows.
+
+| knob | d1 (target) | run #2 (flat) | **run #3** |
+|---|---|---|---|
+| data | ~250k prompts ×10 ep | 32 fixed | **full set, fresh** |
+| diffusion_steps (NFE) | **128** | 64 | **128** ✓ |
+| max_completion | **256** | 128 | **256** ✓ |
+| num_generations G | 6 | 6 | **6** ✓ |
+| μ (num_iterations) | 8† | 6 | **8** ✓ |
+| LR | 3e-6 | 1e-5 | **3e-6** ✓ |
+| β / ε / block | 0.04 / 0.5 / 32 | same | same ✓ |
+| prompts / optim-step | 16 (8 GPU × ga2) | 1 | **1** (1 GPU, ga1) |
+| GPUs × wall | 8×A100 × 72h | 1×H200 × ~1.4h | **1×H200 × 8h** |
+| unique prompts (8h) | ~250k | 32 | **~575 [EST]** |
+| **% of d1's prompt-rollouts** | 100% | 0.013% | **~0.22% (≈1/450)** |
+
+†d1's countdown override = μ 8 (its gsm config uses μ 12). **Run #3 matches every *per-rollout* knob to d1**;
+it differs only in GPU count (1 vs 8), total volume (~1/450), and grad-accum (1 vs 2 → 1 prompt/step vs 16).
+Submitted 17:33, est start ≤19:19 (likely ~18:01 when run #2 frees its h200). `RUN=rungA_cd_run3`,
+save_steps 400, max_steps 6000 (the 8h wall cuts it ~5000). Uses `exp/rungA.sbatch` (d1's full-set trainer).
+
+**Honest expectation:** ~1/450 of d1's data is still tiny. Run #3 either shows a **partial lift** (rollout
+fidelity *was* the bottleneck) or **confirms the lift needs scale beyond our single-GPU budget** (the G-go
+NO-GO). Both are clean, honest data points.

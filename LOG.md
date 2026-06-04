@@ -7,6 +7,25 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Rung-A run #2 (7431403) flat → run #3 (7437645) QUEUED: isolate rollout fidelity
+
+**Run #2 (32 fixed prompts, G6, μ6, LR 1e-5, diffusion_steps 64, max_comp 128, h200):** the overfit-sized
+mechanism demo. **Reward flat** through step 1344/2000 — per-epoch [0.246, 0.285, 0.289, 0.246, 0.296,
+0.274, 0.30], overall 0.277, frac≥0.9 ≈ 0. **Soft NEGATIVE.** Letting it finish for the record; not
+evaluating its checkpoint (predictably ~21%).
+- **Cross-run read (#1 + #2):** both used a *low-fidelity rollout* (diffusion_steps 64, max_comp 128). Weak
+  base model (~20%) ⇒ most groups have all-wrong completions ⇒ `reward_std=0` ⇒ advantage 0 ⇒ zero gradient.
+  Volume and revisiting can't fix missing signal ⇒ next lever = **rollout fidelity**.
+
+**Run #3 (7437645, queued, h200) = d1-faithful-rollout slice on the FULL FRESH set:** diffusion_steps **128**,
+max_completion **256**, G **6**, μ **8**, LR 3e-6, β 0.04, ε 0.5 — every per-rollout knob = d1. per_device 6,
+grad_accum 1, max_steps 6000 (8h wall ~5000), save_steps 400, `RUN=rungA_cd_run3`. ~575 fresh prompts in 8h
+≈ **1/450 of d1's data**. Differs from d1 only in GPU count (1 vs 8), total volume, grad_accum (1 vs 2). Uses
+`exp/rungA.sbatch` (d1's full-set trainer, not the subset wrapper). Submitted 17:33; est start ≤19:19 (likely
+~18:01 when #2 frees its h200). Hypothesis: higher-fidelity rollouts → more correct samples → non-zero
+advantage → the signal #1/#2 lacked. Expectation: partial lift *or* clean confirmation the lift needs
+beyond-budget scale (the G-go NO-GO).
+
 ## 2026-06-04 — Phase 2 Rung-A run #1 (7428265): NEGATIVE — no reward lift (under-trained)
 
 Full run completed clean (h200, rc=0, ~42 min, 1500 steps, checkpoints every 24). **Reward flat ~0.30
