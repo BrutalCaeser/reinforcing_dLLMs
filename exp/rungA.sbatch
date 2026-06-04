@@ -35,6 +35,8 @@ export HF_DATASETS_OFFLINE=1
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export WANDB_MODE=offline
+export PYTHONUNBUFFERED=1                 # stream stdout live (no buffering) -> log is tail -f-able
+export HF_HUB_DISABLE_PROGRESS_BARS=1
 MODEL=${MODEL:-GSAI-ML/LLaDA-8B-Instruct}
 
 # --- knobs (Rung-A defaults; calibration unless overridden) ---
@@ -74,9 +76,9 @@ accelerate launch --num_processes 1 --num_machines 1 --mixed_precision bf16 --dy
     --learning_rate 3e-6 --beta 0.04 --epsilon 0.5 \
     --save_strategy steps --save_steps "$SAVESTEPS" --save_total_limit 3 \
     --resume_from_checkpoint "$RESUME" \
-    --report_to none --logging_steps 1 \
-    --run_name "$RUN" --output_dir "$OUT" 2>&1 | tail -80
-rc=${PIPESTATUS[0]}
+    --report_to none --logging_steps 1 --disable_tqdm True \
+    --run_name "$RUN" --output_dir "$OUT"
+rc=$?   # SLURM --output captures stdout+stderr live (no tail buffer); tail -f the log to watch
 END=$(date +%s)
 echo "rungA rc=$rc | wall=$((END-START))s for max_steps=$MAXSTEPS (=> ~$(( (END-START) / (MAXSTEPS>0?MAXSTEPS:1) ))s/step incl. amortized generation)"
 echo "checkpoints:"; ls -1 "$OUT" 2>/dev/null | grep -i checkpoint | tail -5
