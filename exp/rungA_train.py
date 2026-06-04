@@ -65,8 +65,10 @@ def main(grpo_config, model_config):
         args=grpo_config, model=model, peft_config=peft_config,
         reward_funcs=reward_functions, train_dataset=train_set,
     )
+    # resume_from_checkpoint is typed Optional[str] -> "False"/"None" arrive as truthy strings; normalize.
     rc = grpo_config.resume_from_checkpoint
-    trainer.train(resume_from_checkpoint=(rc if rc else None))
+    resume = None if (not rc or str(rc).lower() in ("false", "none")) else rc
+    trainer.train(resume_from_checkpoint=resume)
 
 
 if __name__ == "__main__":
