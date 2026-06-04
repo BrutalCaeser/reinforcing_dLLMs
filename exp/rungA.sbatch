@@ -40,11 +40,13 @@ MODEL=${MODEL:-GSAI-ML/LLaDA-8B-Instruct}
 # --- knobs (Rung-A defaults; calibration unless overridden) ---
 G=${G:-4}                       # num_generations (group size); d1=6
 DIFFSTEPS=${DIFFSTEPS:-64}      # rollout NFE (NfePareto-cut from d1's 128)
-MAXCOMP=${MAXCOMP:-256}         # max completion length (d1 countdown=256)
+MAXCOMP=${MAXCOMP:-128}         # max completion length: 128 fits a 32GB V100 AND matches eval gen_length
+                                #   (d1 used 256 on 8xA100; 256 OOMs a V100 -> we fit the common GPU)
 PERDEV=${PERDEV:-4}             # per_device_train_batch_size (=G -> 1 prompt/step)
 NUMITER=${NUMITER:-6}           # mu, GRPO inner updates per generation; d1=12
+GC=${GC:-True}                  # gradient_checkpointing: big activation-memory cut -> fits V100
 MAXSTEPS=${MAXSTEPS:-12}        # optimizer steps; calibration=12, full run >=150
-SAVESTEPS=${SAVESTEPS:-50}
+SAVESTEPS=${SAVESTEPS:-24}      # divisible by NUMITER (6) per d1's resume note
 RESUME=${RESUME:-False}
 RUN=${RUN:-rungA_cd_calib}
 OUT=$P/results/$RUN
@@ -68,6 +70,7 @@ accelerate launch --num_processes 1 --num_machines 1 --mixed_precision bf16 --dy
     --gradient_accumulation_steps 1 \
     --diffusion_steps "$DIFFSTEPS" --block_length 32 --max_completion_length "$MAXCOMP" --max_prompt_length 200 \
     --num_iterations "$NUMITER" --max_steps "$MAXSTEPS" \
+    --gradient_checkpointing "$GC" \
     --learning_rate 3e-6 --beta 0.04 --epsilon 0.5 \
     --save_strategy steps --save_steps "$SAVESTEPS" --save_total_limit 3 \
     --resume_from_checkpoint "$RESUME" \
