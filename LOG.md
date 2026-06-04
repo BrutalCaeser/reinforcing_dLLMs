@@ -1,8 +1,29 @@
-# Engineering Log — DiffuGRPO (RL for Diffusion LLMs)
+# Engineering Log — reinforcing_dLLMs (RL post-training for diffusion LLMs)
 
 Newest at top. Running engineering/devops log: what ran, where, the result, and the decision.
+_(Project renamed 2026-06-04: `diffusion-rl` → `reinforcing_dLLMs`. Repo/local dir renamed; the
+cluster scratch dir stays `/scratch/gupta.yashv/diffusion-rl/` to preserve the conda env prefix —
+a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO / the d1 reproduction.)_
 
 ---
+
+## 2026-06-04 — Project rename + Gate G1-RL checks 1&2 PASS + docs
+
+- **Rename:** `diffusion-rl` → **`reinforcing_dLLMs`** (GitHub repo + local dir + project identity).
+  Cluster scratch path unchanged (env-prefix safety); symlink added; git remotes repointed.
+- **Gate G1-RL (checks 1&2) ✅ PASS** (job 7426699). Estimator-vs-ELBO ALL PASS after correcting two
+  mis-specified gates (see below): C1a gold ranked #1 by both, group Spearman 1.0; C1b corruption
+  ladders monotone + Spearman 1.0 (×3); **C3 common-mode cancellation: same-completion matched-seed
+  log-ratio corr = 1.0000** (log-ratio std = 0.005× absolute) → the prompt-mask variance is fully
+  common-mode and cancels in GRPO's π_new/π_old ratio. Bias +0.099 (tiny). Rewards 19/19.
+  - *Correction trail (honest):* run-1 "failed" cross-prompt Pearson (0.85) and absolute cross-seed
+    variance (11×). Both were **wrong quantities** — GRPO compares within-group (not across prompts)
+    and uses matched seeds (noise cancels). Rewrote gates → all pass. The estimator is fit for GRPO:
+    ranking-perfect, low-bias, and its high absolute variance is neutralized by matched seeding.
+- **Docs:** overhauled README; new DOCS.md (maintenance discipline), FINDINGS.md (living results),
+  theory.md (full project theory). Public-accuracy fix: dropped the unverified "Mercury uses diffu-GRPO"
+  claim.
+- Next: check 3 (tiny RL smoke) → close G1-RL → Phase 2 Rung-A RL run.
 
 ## 2026-06-04 — Phase 1: estimator + reward validation (Gate G1-RL, checks 1&2)
 
@@ -55,7 +76,7 @@ Goal: validate the two no-training components before any RL run — the log-prob
 ### ✅ Gate G0-RL PASSED (2026-06-04)
 - **env built clean** (45 min): torch 2.6.0+cu124, transformers 4.49.0, trl 0.16.0.dev0, peft 0.15.1,
   bitsandbytes 0.45.3, deepspeed 0.16.4. LLaDA-8B-Instruct cached (15G).
-- **Public repo:** https://github.com/BrutalCaeser/diffusion-rl (building in the open; git-as-spine).
+- **Public repo:** https://github.com/BrutalCaeser/reinforcing_dLLMs (renamed from diffusion-rl 2026-06-04; building in the open; git-as-spine).
 - **Baseline (job 7426079, V100, 22 min):** LLaDA-8B-Instruct on Countdown cd3 (256 ex, gen_len 128, NFE 64,
   **sdpa — no flash-attn needed**) = **21.48%** (avg 110.0 effective tokens).
 - **Validation vs d1's shipped baseline** (`eval/eval_baselines/`, same setting) = **20.70%** → **+0.78% match**

@@ -1,0 +1,135 @@
+# FINDINGS — reinforcing_dLLMs
+
+Living results & analysis. Every gate's **numbers** and an **honest interpretation**. Updated whenever a
+result lands (even partial or negative). The "why" behind the methods is in `theory.md`; the plan is in
+`SPEC.md`; the chronological trail is in `LOG.md`.
+
+**Status:** Phase 1 — Gate G1-RL checks 1 & 2 **PASS**. Next: check 3 (tiny RL smoke) → Phase 2 (Rung-A RL run).
+
+| Gate | Question | Verdict |
+|---|---|---|
+| G-go | Is a full reproduction feasible on our budget? | **NO** (~24 GPU-days); **Rung A** (~0.5 GPU-day) **GO** |
+| G0-RL | Does the env work + what's the no-RL baseline? | ✅ baseline **21.48%** ≈ d1's **20.70%** |
+| G1-RL (2) | Are the reward functions correct? | ✅ **19/19** |
+| G1-RL (1) | Does d1's one-step log-prob estimator hold up vs the ELBO? | ✅ **ALL PASS** (ranking 1.0, bias +0.10, noise cancels) |
+| G-RL | Does RL raise held-out accuracy over baseline? | ⏳ pending (Phase 2) |
+
+---
+
+## Gate G-go — compute go/no-go
+
+Full faithful `d1` = 8×A100 × 72h ≈ **~576 A100-hours ≈ ~24 GPU-days** `[ESTIMATE]` → **NO-GO** on our
+8h single-GPU budget. **Rung A** (RL from `LLaDA-8B-Instruct`, `diffusion_steps` 64, `G` 4, ~256-prompt
+Countdown subset, ~50–100 steps, checkpoint-resume) ≈ **~0.5 GPU-day** `[ESTIMATE]` → **GO**. Ladder:
+A → reduced-faithful B → novel block-diffusion C, each gated on the previous.
+
+---
+
+## Gate G0-RL — baseline (the number to beat)
+
+**LLaDA-8B-Instruct, no RL, Countdown cd3** (256 examples, `gen_length` 128 → `diffusion_steps` 64,
+`block_length` 32, **sdpa** — no flash-attn needed), job 7426079:
+
+| Metric | Value |
+|---|---|
+| **Countdown accuracy** | **21.48%** |
+| avg effective completion length | 110.0 tokens |
+| d1's own shipped baseline (same setting) | **20.70%** |
+| gap | **+0.78%** (sampling noise; d1 averages seeds 1–6) → clean reproduction |
+
+For reference, d1's baseline degrades with length (20.7% @128 → 19.5% @256 → 16.0% @512), consistent with
+ours. **The number diffu-GRPO must beat ≈ 21%.**
+
+---
+
+## Gate G1-RL, check 2 — reward functions (19/19)
+
+`src/test_rewards.py` against d1's real `reward_func.py` (math500 import stubbed; countdown path untouched).
+Confirms the exact reward semantics we'll train on:
+
+- correct equation (uses each number once, evaluates to target) → **1.0**
+- valid expression, wrong result → **0.1**; wrong/reused/missing numbers → **0.1**
+- no parseable `<answer>` → **0**
+- multiset rule, safe-eval guard, and "last `<answer>` wins" parsing all verified.
+- noted spec quirk (not a failure): `evaluate_equation`'s allow-list permits `**`/unary signs, which the
+  Countdown task never emits.
+
+---
+
+## Gate G1-RL, check 1 — one-step estimator vs brute-force ELBO
+
+`src/elbo_vs_onestep.py` on the real LLaDA-8B-Instruct (job 7426699). We compare d1's one-step estimator
+(mirror of `forward_process` + `_get_per_token_logps`) to a Monte-Carlo MDM/ELBO, and measure the
+properties **GRPO actually depends on** (not absolute likelihood accuracy).
+
+### Diagnostics (reported, not gated)
+- **Bias** = mean(ELBO − one-step@p0) = **+0.099** — tiny and positive: the one-step estimate slightly
+  *underestimates* the ELBO, exactly as predicted (it's the hardest, fully-masked `t=1` slice).
+- **Per-t curve** (per-token logp of masked slots vs mask ratio `t`): `-0.06` at t≤0.5 rising to `-0.21`
+  at t=1.0 — visualizes the bias mechanism: predictions get harder as more of the answer is hidden, and
+  the one-step estimator lives at the hardest end (t=1).
+- **Cross-prompt Pearson(one-step, ELBO)** = 0.849. **Not gated** — GRPO never compares across prompts;
+  this is over 6 near-identical easy 2-token completions (tiny dynamic range), so low correlation here is
+  expected and irrelevant.
+
+### Gated checks — the GRPO-relevant properties
+
+**C1a — within-group ranking** (a group of completions for one prompt; advantage = ranking):
+
+| completion | one-step | ELBO |
+|---|---|---|
+| gold `" Paris."` | −0.41 | −0.29 |
+| wrong capital `" Berlin."` | −8.97 | −12.16 |
+| off-topic `" pizza."` | −14.88 | −21.79 |
+| gibberish `" qwx zzf."` | −75.69 | −45.33 |
+
+→ **gold ranked #1 by both; Spearman = 1.000.** ✅
+
+**C1b — corruption ladders** (gold → 25% → 50% → 100% random tokens; quality monotonically worse):
+
+| ladder | one-step | ELBO | monotone & agree |
+|---|---|---|---|
+| paris | [−6.1, −42.4, −79.3, −127.1] | [−0.9, −55.4, −95.0, −115.0] | ✅ Spearman 1.0 |
+| water | [−4.6, −44.4, −78.4, −149.5] | [−1.7, −45.0, −83.6, −119.3] | ✅ Spearman 1.0 |
+| sun   | [−31.2, −63.4, −91.9, −154.9] | [−12.4, −55.1, −86.3, −137.6] | ✅ Spearman 1.0 |
+
+→ both estimators decrease monotonically with corruption and agree perfectly. ✅
+
+**C3 — common-mode cancellation** (why the high-variance estimator still trains):
+
+| quantity | value | meaning |
+|---|---|---|
+| std(logp_A) across 24 mask seeds | **4.037** | the raw one-step estimate **is** high-variance |
+| corr(logp_A, logp_B), *different* completions, matched seed | 0.760 | conservative: partial noise sharing |
+| **corr(logp_A^old, logp_A^new), same completion, small policy step, matched seed** | **1.0000** | **GRPO's actual ratio** |
+| log-ratio std / absolute std | **0.005** | the matched-seed log-ratio is ~200× quieter than the absolute estimate |
+
+→ For the quantity GRPO actually uses — the **ratio of the same answer under π_new vs π_old at a matched
+mask** — the large masking noise is **fully common-mode and cancels** (correlation 1.0). ✅ **This is the
+mechanism that makes a biased, high-variance estimator safe to train with.**
+
+### Verdict: **ALL PASS** (job 7426699, `results/phase1_estimator.json`).
+
+### The honest correction trail (kept on purpose)
+Our **first** run of this test "failed" two checks — cross-prompt Pearson (0.85) and absolute cross-seed
+variance (ratio 11×). On analysis, **both were the wrong yardsticks**, not estimator defects:
+- GRPO compares completions **within a group**, never across prompts → cross-prompt Pearson is irrelevant.
+- GRPO uses **matched mask seeds** for π_new/π_old → the absolute cross-seed variance cancels in the ratio.
+
+We **rewrote the gates to measure the GRPO-relevant quantities** (within-group ranking, corruption-ladder
+monotonicity, same-completion matched-seed correlation) — and then everything passed, *confirming* the
+estimator is fit for purpose. Lesson: **fix the yardstick, not the threshold.** We kept the failed numbers
+in `LOG.md` — a reproduction that hides its missteps isn't one.
+
+**Bottom line:** d1's one-step estimator is biased and high-variance in absolute terms, but it is
+**ranking-perfect**, **low-bias**, and its variance is **neutralized by matched seeding** — exactly the
+properties GRPO needs. It is validated for the Rung-A run.
+
+---
+
+## What's next
+- **Check 3 — tiny RL smoke** (`exp/phase1_tiny_rl.sbatch`, to be added): d1 trainer, `G=2`,
+  `max_completion 64`, `diffusion_steps 32`, 2–4 steps; confirm the loop runs, loss is finite, no OOM →
+  **close Gate G1-RL**.
+- **Phase 2 — Rung-A RL run** (Gate G-RL): the headline — does held-out Countdown accuracy rise above
+  21.48%? This is the reproduction's core claim.

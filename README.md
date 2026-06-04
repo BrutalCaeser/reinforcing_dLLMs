@@ -1,4 +1,6 @@
-# diffusion-rl — RL post-training for diffusion LLMs (diffu-GRPO)
+# reinforcing_dLLMs — RL post-training for diffusion LLMs (diffu-GRPO)
+
+> _Repo `github.com/BrutalCaeser/reinforcing_dLLMs` (renamed from `diffusion-rl`, 2026-06-04)._
 
 An **independent, constrained-compute reproduction and study of `d1`'s diffu-GRPO** — reinforcement
 learning that lifts reasoning accuracy in a *masked diffusion* language model — with a planned novel
@@ -78,6 +80,7 @@ LOG.md                   engineering log — what ran, where, result, decision (
 FINDINGS.md              living results & analysis — every gate's numbers + honest interpretation
 UPSTREAM.md              pinned d1 commit + LLaDA base (not vendored) + env versions
 DOCS.md                  how this repo is documented & kept current (the maintenance discipline)
+theory.md                the full theory in plain language — diffusion LMs, RL, diffu-GRPO, the estimator
 env/   build_d1_env.sbatch     conda env on a compute node (job-local HOME condarc fix)
        prefetch_llada.sbatch   download LLaDA-8B-Instruct on the internet partition
 exp/   baseline_countdown.sbatch   G0-RL: baseline Countdown accuracy (d1's eval/)
