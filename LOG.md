@@ -4,6 +4,28 @@ Newest at top. Running engineering/devops log: what ran, where, the result, and 
 
 ---
 
+## 2026-06-04 — Phase 1: estimator + reward validation (Gate G1-RL, checks 1&2)
+
+Goal: validate the two no-training components before any RL run — the log-prob estimator
+(the part most likely to be subtly wrong) and the reward functions.
+
+- **Check 2 — reward unit tests** (`src/test_rewards.py`): tests d1's REAL `reward_func.py`
+  (countdown path), math500 import stubbed (unrelated, sympy-heavy). 19/19 PASS **locally**:
+  correct eq → 1.0, valid-but-wrong → 0.1, no/garbage `<answer>` → 0, wrong/reused/missing
+  numbers → 0.1; multiset rule + safe-eval + last-`<answer>` parsing confirmed. Noted spec
+  quirk: `evaluate_equation` allow-list permits `**`/unary signs (never emitted by countdown).
+- **Check 1 — one-step vs brute-force ELBO** (`src/elbo_vs_onestep.py`, GPU): exact mirror of
+  `forward_process` + `_get_per_token_logps` (mask all completion, p_mask_prompt∈{0,0.15}, one
+  forward, CE on completion slots) vs MDM/LLaDA conditional ELBO (t~U(0,1), iid mask, 1/t
+  reweight, MC mean±SE). Measures Pearson(one_step,ELBO), ranking preservation (Spearman, gold
+  #1), and seed-variance of the one-step estimate. Mirrors d1 countdown config: mask_id 126336,
+  p_mask_prompt 0.15. PASS gates: Pearson≥0.90, gold ranked #1 by both, Spearman≥0.80,
+  seed_var_ratio<0.34. Bias (ELBO − one_step) reported, expected >0 (known d1 caveat; wd1/AGRPO unbias).
+- Driver: `exp/phase1_gate.sbatch` (gpu-short, 1h, HF_HUB_OFFLINE). Runs both checks, prints verdict.
+- **Config grounding:** train.yaml sets `p_mask_prompt: 0.15` (dataclass default is 0.3),
+  num_iterations 12, block_length 32, diffusion_steps 128, ε 0.5, β 0.04. Test uses the 0.15 value.
+- Next: submit phase1_gate; then check 3 (tiny RL smoke, `exp/phase1_tiny_rl.sbatch`) → close G1-RL.
+
 ## 2026-06-03 — Phase 0: recon + compute go/no-go (Gate G-go)
 
 - **Read the d1 stack end-to-end** (grounding rule #1): `diffu_grpo_trainer.py` (the log-prob estimator
