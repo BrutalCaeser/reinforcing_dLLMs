@@ -7,6 +7,21 @@ a `reinforcing_dLLMs` symlink points to it. Method codename remains diffu-GRPO /
 
 ---
 
+## 2026-06-04 — Extension resume bug (μ-divisibility) found+fixed; d1 repetition CONFIRMED (240k × 10 ep)
+
+**d1 DOES repeat prompts (verified):** `countdown_base.sbatch` inherits `train.yaml` `num_train_epochs: 10`
+with **no max_steps override** (its only overrides: num_iterations 8, model, dataset, names). Countdown train
+set = **240,632 prompts** (`filter len(nums)==3`) − 500 eval = 240,132. So d1 = 240k prompts **×10 epochs**
+(each prompt ~10×) + μ=8 inner reuse → unambiguously a **repetition regime**, validating run #2. (72h wall may
+cap realized epochs <10 `[UNVERIFIED]`.) Answers "were d1's prompts repeated?" → **yes.**
+
+**Extension v1 (7438917) CRASHED on resume** from checkpoint-2000: `compute_loss` got `inputs=None`
+(`'NoneType' not subscriptable`). Cause: trl GRPO gates generation on `global_step % num_iterations`; restored
+`global_step=2000`, `2000%6=2≠0` → reuse-empty-buffer → None. **A GRPO checkpoint is resumable only if
+`global_step % μ == 0`** (d1's train.py warns this). checkpoint-2000 = forced final-save at max_steps
+(μ-misaligned). **Fix: resume from checkpoint-1920** (1920%6=0). **Extension v2 = job 7439596** (resume 1920 →
+max_steps 6000). Verification of clean resume in flight.
+
 ## 2026-06-04 — Run #2 FINISHED: late reward UPTICK (preliminary POSITIVE) → extend it; defer run #3 chain
 
 Run #2 (32 fixed prompts) completed 2000/2000. **Reward rose late:** per-epoch [.246,.285,.289,.246,.296,

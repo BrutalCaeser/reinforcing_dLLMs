@@ -209,13 +209,26 @@ needed more **passes**. (Note: run #3's live log later shows `zero_std_ratio 0.0
 so zero-advantage starvation was over-stated.)
 
 **The decisive lesson — repetition, not single-pass volume:** run #1 (full set, each prompt once) = flat;
-run #2 (32 prompts ×11) = rising. Reward moves by **revisiting** a fixed set — exactly what d1 did (250k
-prompts × **10 epochs**). → **Next: extend run #2** (ride the win), not the fresh-prompt chain.
+run #2 (32 prompts ×11) = rising. Reward moves by **revisiting** a fixed set — **exactly what d1 did**:
+verified in `countdown_base.sbatch` — it inherits `train.yaml`'s **`num_train_epochs: 10`** with **no
+`max_steps` override**, over a **240,632-prompt** countdown set (`filter len(nums)==3`) minus 500 eval. So d1
+trains ~240k prompts **×10 epochs** (each prompt seen ~10×) on top of **μ=8** inner reuse — unambiguously a
+*repetition* regime (the 72h wall may cap realized epochs <10 `[UNVERIFIED]`). → **Next: extend run #2**
+(ride the win), not the fresh-prompt chain.
 
-### Run #2 EXTENSION (job 7438917): resume → ~+21 epochs toward saturation
-Resume `checkpoint-2000`, continue the same 32 prompts to `max_steps 6000` (LR 1e-5, save every epoch).
+### Run #2 EXTENSION (job 7439596): resume → ~+21 epochs toward saturation
+Resume **`checkpoint-1920`**, continue the same 32 prompts to `max_steps 6000` (LR 1e-5, save every epoch).
 **Question:** does reward keep climbing toward ~1.0 (clean mechanism proof) or plateau (the model's ceiling
-on those 32)? Either is a definitive, honest result — and a strong "I reproduced diffu-GRPO" outreach artifact.
+on those 32)? Either is a definitive result + a strong "I reproduced diffu-GRPO" outreach artifact.
+
+**Resume gotcha (cost one job — kept on record):** the first attempt (job 7438917) resumed from
+`checkpoint-2000` and **crashed** — `compute_loss` got `inputs=None` (`'NoneType' object is not
+subscriptable`). trl GRPO gates "generate fresh rollouts vs. reuse buffer" on `global_step % num_iterations`;
+the restored `global_step=2000` has `2000 % 6 = 2 ≠ 0` → it took the *reuse-buffer* branch, but the buffer is
+empty in a fresh process → `None`. **A diffu-GRPO checkpoint is only resumable when `global_step % μ == 0`**
+(d1's `train.py` warns exactly this). `checkpoint-2000` was the **forced final-save at `max_steps`**, not a
+periodic save, so it's μ-misaligned; **`checkpoint-1920`** (1920 % 6 = 0) resumes cleanly. Lesson: when
+resuming GRPO, pick a checkpoint at a multiple of `num_iterations`.
 
 ## Gate G-RL — Rung-A run #3 (job 7437645, leg 1 RUNNING): isolate rollout fidelity (d1-faithful slice)
 
