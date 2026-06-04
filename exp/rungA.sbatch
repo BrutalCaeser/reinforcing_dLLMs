@@ -9,13 +9,18 @@
 # before committing to long 8h jobs. Full run: override MAXSTEPS (e.g. 150) + RESUME=True
 # on resubmits. Checkpoint-resume built in (save_steps; resume_from_checkpoint).
 #
+# GPU ALLOCATION (smart scheduling): requests `gpu:1` (ANY type) so SLURM backfills onto the
+#   FIRST free GPU. a100/h200 are usually 100% allocated -> pinning them queues ~1 day; `gpu:1`
+#   lands on whatever frees first (often h200/a100/v100) within the hour (verify with
+#   `sbatch --test-only ...`). Pin a fast type ONLY when `sinfo` shows it idle (e.g. add
+#   `--gres=gpu:h200:1`). For runs >8h, `--partition=courses-gpu` (1-day limit, idle p100s, 16GB).
 # Submit (calibration):  sbatch --time=01:00:00 --export=ALL,MAXSTEPS=12 exp/rungA.sbatch
 # Submit (full run):     sbatch --export=ALL,MAXSTEPS=150,SAVESTEPS=25,RUN=rungA_cd_full exp/rungA.sbatch
 # Resume:                sbatch --export=ALL,MAXSTEPS=150,RESUME=True,RUN=rungA_cd_full exp/rungA.sbatch
 # =============================================================================
 #SBATCH --job-name=rungA
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=96G
