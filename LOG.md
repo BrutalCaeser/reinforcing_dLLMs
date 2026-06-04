@@ -21,4 +21,12 @@ Newest at top. Wiki mirror: `~/Documents/wiki/wiki/projects/DiffuGRPO.md`. RL pr
     `[ESTIMATE]` ~0.3–0.7 GPU-day. Refine with a real per-step timing on the first run.
   - Rung B (reduced faithful) ≈ a few GPU-days — decide after A. Rung C (block-diffusion port) — gated on B.
 - **Built scaffold:** SPEC.md (recon + G-go), env/build_d1_env.sbatch (sdpa-first; job-local HOME condarc fix),
-  repo skeleton. **Next:** build env (compute node) → LLaDA smoke + baseline accuracy (Gate G0-RL).
+  repo skeleton. Committed `5fa6ac2`, synced to cluster `repo/`.
+- **Rung-A task = Countdown (cd3)** — d1's biggest RL lift (+26.2%); clearest mechanism signal. Verified the
+  pipeline in `_refs/d1-ro`: data `{"input":"30,100,93","output":"23"}` (256 test); prompt = R1-style
+  `<reasoning>…</reasoning><answer>EXPR</answer>` w/ worked example; reward (`reward_func.compute_score`):
+  parse `<answer>`, **all numbers used exactly once** (`validate_equation`), safe-eval, **1.0** correct /
+  **0.1** valid-but-wrong / **0** unparseable. Baseline path: `eval/eval.py --dataset countdown --gen_length 128`
+  (generate steps=64, block 32 → NFE 64) → `parse_and_get_acc.py`.
+- **Jobs running (parallel):** env build 7421414 (gpu-short), LLaDA-8B-Instruct (`GSAI-ML/LLaDA-8B-Instruct`,
+  id confirmed) prefetch 7421483 (sharing, into d1 HF_HOME). **Next:** baseline (no-RL) Countdown accuracy when both land = Gate G0-RL.
