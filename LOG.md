@@ -28,5 +28,16 @@ Newest at top. Running engineering/devops log: what ran, where, the result, and 
   parse `<answer>`, **all numbers used exactly once** (`validate_equation`), safe-eval, **1.0** correct /
   **0.1** valid-but-wrong / **0** unparseable. Baseline path: `eval/eval.py --dataset countdown --gen_length 128`
   (generate steps=64, block 32 → NFE 64) → `parse_and_get_acc.py`.
-- **Jobs running (parallel):** env build 7421414 (gpu-short), LLaDA-8B-Instruct (`GSAI-ML/LLaDA-8B-Instruct`,
-  id confirmed) prefetch 7421483 (sharing, into d1 HF_HOME). **Next:** baseline (no-RL) Countdown accuracy when both land = Gate G0-RL.
+- **Jobs (parallel):** env build 7421414 (gpu-short), LLaDA-8B-Instruct prefetch 7421606 (sharing).
+
+### ✅ Gate G0-RL PASSED (2026-06-04)
+- **env built clean** (45 min): torch 2.6.0+cu124, transformers 4.49.0, trl 0.16.0.dev0, peft 0.15.1,
+  bitsandbytes 0.45.3, deepspeed 0.16.4. LLaDA-8B-Instruct cached (15G).
+- **Public repo:** https://github.com/BrutalCaeser/diffusion-rl (building in the open; git-as-spine).
+- **Baseline (job 7426079, V100, 22 min):** LLaDA-8B-Instruct on Countdown cd3 (256 ex, gen_len 128, NFE 64,
+  **sdpa — no flash-attn needed**) = **21.48%** (avg 110.0 effective tokens).
+- **Validation vs d1's shipped baseline** (`eval/eval_baselines/`, same setting) = **20.70%** → **+0.78% match**
+  (sampling noise; d1 averages seeds 1–6). Clean reproduction. (d1 baseline drops w/ length: 20.7%@128 → 19.5%@256 → 16.0%@512.)
+- **The number to beat with diffu-GRPO ≈ 21%.**
+- **Next (Phase 1):** unit-test d1's log-prob estimator (`_get_per_token_logps`) vs a brute-force ELBO on toy
+  sequences (the component most likely to be subtly wrong) → tiny RL loop sanity → Gate G1-RL.
