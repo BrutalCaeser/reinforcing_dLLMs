@@ -10,6 +10,12 @@ again in the **Glossary (§14)**. Anticipated questions are answered in the **FA
 document states a fact about `d1`, it reflects the *actual source code* we read (not the paper's idealized
 description) — discrepancies are flagged explicitly.
 
+> **⚠️ Correction (2026-06-04):** §13 ("the novel direction: RL on block diffusion") is **outdated**. A 2026
+> literature sweep found RL on block / semi-autoregressive diffusion is an **active subfield**, not
+> unexplored (TraceRL→TraDo arXiv:2509.06949; MMaDA/UniGRPO; StableDRL). **It is not novel; that direction is
+> dropped.** The genuinely open problem is the **log-prob estimator** (`mathematics.md`). Treat
+> "novel"/"unexplored" anywhere below as historical.
+
 **Contents**
 1. The big picture in one page
 2. What a language model actually is
@@ -444,15 +450,17 @@ of every component it depends on.** That's why §11 happened before any training
 
 ---
 
-## 13. The novel direction: RL on block diffusion
+## 13. RL on block diffusion *(SUPERSEDED 2026-06-04 — not novel; active subfield, see top note)*
 
 `d1` trains on **LLaDA**, a *fully* masked diffusion model. Our sister projects studied **block diffusion**
 (BD3-LM, §4) on the *inference* side. The open question (Rung C): **does diffu-GRPO transfer to block
 diffusion, and does the block structure change RL dynamics?** Intuition: blocks give a cleaner notion of
 "what was generated when" (AR across blocks), which could mean cleaner *credit assignment* (knowing which
-part of the answer deserves the reward) than fully-parallel denoising. This is genuinely unexplored and is
-the part with publication potential — but it is **gated** behind Rungs A and B, and a negative result
-(it doesn't transfer cleanly) would itself be worth reporting honestly.
+part of the answer deserves the reward) than fully-parallel denoising. ~~This is genuinely unexplored and is the part with publication potential~~ — **[SUPERSEDED 2026-06-04: RL on
+block diffusion is an active subfield (TraceRL/TraDo arXiv:2509.06949, MMaDA/UniGRPO, StableDRL); it is **not**
+novel. The open problem is the log-prob estimator — see `mathematics.md`.]** The original intuition below
+(block structure → cleaner per-block credit assignment) is still a reasonable research *question*, but it is
+now being actively studied by others, not first-explored here.
 
 ---
 

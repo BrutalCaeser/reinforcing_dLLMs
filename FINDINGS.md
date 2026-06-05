@@ -25,7 +25,7 @@ result lands (even partial or negative). The "why" behind the methods is in `the
 Full faithful `d1` = 8×A100 × 72h ≈ **~576 A100-hours ≈ ~24 GPU-days** `[ESTIMATE]` → **NO-GO** on our
 8h single-GPU budget. **Rung A** (RL from `LLaDA-8B-Instruct`, `diffusion_steps` 64, `G` 4, ~256-prompt
 Countdown subset, ~50–100 steps, checkpoint-resume) ≈ **~0.5 GPU-day** `[ESTIMATE]` → **GO**. Ladder:
-A → reduced-faithful B → novel block-diffusion C, each gated on the previous.
+A → reduced-faithful B → ~~novel block-diffusion C~~ **(C dropped 2026-06-04 — RL on block diffusion is an active subfield, not novel; see README)**, each gated on the previous.
 
 ---
 

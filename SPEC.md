@@ -2,8 +2,16 @@
 
 **Owner:** Yashvardhan Gupta · **Started:** 2026-06-03 · **Cluster:** Northeastern Explorer
 **Predecessors:** [NfePareto] (NFE axis — COMPLETE; fixes our rollout-NFE budget), [BlockPareto] (block axis).
-**Scope:** independent, constrained-compute reproduction of d1's diffu-GRPO + a planned novel block-diffusion port.
-The feasibility ladder (cheap-mechanism → faithful → novel) and decision gates are in §2–3 below.
+**Scope:** independent, constrained-compute reproduction of d1's diffu-GRPO. ~~+ a planned novel block-diffusion port~~ — **dropped (not novel; see correction note below).**
+The feasibility ladder (cheap-mechanism → faithful → ~~novel~~) and decision gates are in §2–3 below.
+
+> **⚠️ Correction (2026-06-04):** the "**novel block-diffusion port**" framing throughout this spec is
+> **superseded**. A 2026 literature sweep found RL on block / semi-autoregressive diffusion is an **active
+> subfield**, not unexplored (TraceRL→TraDo arXiv:2509.06949; MMaDA/UniGRPO arXiv:2505.15809; StableDRL
+> arXiv:2603.06743). **Rung C is dropped.** What actually emerged: the live open problem is the **log-prob
+> estimator**, and the project refocuses on an estimator comparison + minimal-compute reproduction. The
+> Rung-A / Rung-B / G-go content below is still accurate — read "novel" mentions as historical. See
+> `README.md`, `FINDINGS.md`, `mathematics.md`.
 
 > This file is the **recon-grounded execution spec** (Phase 0 output): the *verified* d1 recipe,
 > the **compute go/no-go decision**, and the reduced **Rung-A** plan. The full 11-layer system design
@@ -11,8 +19,7 @@ The feasibility ladder (cheap-mechanism → faithful → novel) and decision gat
 
 ## 0. Thesis
 Masked diffusion LMs improve with RL via **diffu-GRPO** (d1): GRPO with a **one-step log-prob estimator**.
-We (Rung A) reproduce the *mechanism* — RL lifts reasoning accuracy on a masked dLLM — then (gated) attempt
-the **novel** port to block-diffusion. The enabler: the diffusion loss is cross-entropy (no argmax) ⇒ log-prob
+We (Rung A) reproduce the *mechanism* — RL lifts reasoning accuracy on a masked dLLM. ~~then (gated) attempt the novel port to block-diffusion~~ — **[dropped 2026-06-04 — not novel; see correction note up top].** The enabler: the diffusion loss is cross-entropy (no argmax) ⇒ log-prob
 is differentiable ⇒ policy gradients flow.
 
 ## 1. Upstream recon — VERIFIED (read 2026-06-03, grounding rule #1)
